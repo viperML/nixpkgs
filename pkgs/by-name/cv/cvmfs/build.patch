@@ -1,0 +1,189 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6cbb2355d..fc77ac377 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -116,7 +116,7 @@ else (MACOSX) # --> Linux
+     endif (ARCHLINUX)
+     set (CMAKE_INSTALL_LIBDIR "lib")
+   else (DEBIAN OR ARCHLINUX) # --> RedHat, Fedora, CentOS, SuSE
+-    set (CMAKE_MOUNT_INSTALL_BINDIR "/sbin")
++    set (CMAKE_MOUNT_INSTALL_BINDIR "${CMAKE_INSTALL_SBINDIR}")
+     set (CVMFS_LIBEXEC_DIR "libexec/cvmfs")
+     if (IS_64_BIT)
+       set (CMAKE_INSTALL_LIBDIR "lib64")
+diff --git a/cmake/Modules/FindLibcrypto.cmake b/cmake/Modules/FindLibcrypto.cmake
+index 8af068571..2cee8d04b 100644
+--- a/cmake/Modules/FindLibcrypto.cmake
++++ b/cmake/Modules/FindLibcrypto.cmake
+@@ -11,14 +11,12 @@ find_path(
+     Libcrypto_INCLUDE_DIRS
+     NAMES tls.h
+     PATHS ${EXTERNALS_INSTALL_LOCATION}/crypto/include
+-    NO_DEFAULT_PATH
+ )
+ 
+ find_library(
+     Libcrypto_LIBRARIES
+     NAMES crypto
+     PATHS ${EXTERNALS_INSTALL_LOCATION}/crypto/lib
+-    NO_DEFAULT_PATH
+ )
+ 
+ include(FindPackageHandleStandardArgs)
+diff --git a/cvmfs/CMakeLists.txt b/cvmfs/CMakeLists.txt
+index c486268d2..1568d1f17 100644
+--- a/cvmfs/CMakeLists.txt
++++ b/cvmfs/CMakeLists.txt
+@@ -880,25 +880,16 @@ if (BUILD_SERVER)
+   #
+   # BUILD_SERVER: install
+   #
+-  install(
+-    CODE  "FILE(MAKE_DIRECTORY \$ENV{DESTDIR}/var/lib/cvmfs-server)"
+-  )
+   install (
+     FILES        ${${PROJECT_NAME}_BINARY_DIR}/cvmfs/cvmfs_server
+     DESTINATION  bin
+     PERMISSIONS  OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+   )
+-  install(
+-    FILES        doc/README-spooler
+-    DESTINATION  "/var/spool/cvmfs"
+-    PERMISSIONS  OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+-    RENAME       README
+-  )
+   install (
+     TARGETS      cvmfs_suid_helper
+     RUNTIME
+     DESTINATION  bin
+-    PERMISSIONS  OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE SETUID
++    PERMISSIONS  OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+   )
+   install (
+     TARGETS      cvmfs_swissknife cvmfs_publish
+@@ -936,22 +927,22 @@ if (BUILD_SERVER)
+ 
+   install(
+     FILES        server/generate_stats_plots.C
+-    DESTINATION  "/usr/share/cvmfs-server"
++    DESTINATION  share/cvmfs-server
+     PERMISSIONS  OWNER_READ GROUP_READ WORLD_READ
+   )
+   install(
+     FILES        server/upload_stats_plots.sh
+-    DESTINATION  "/usr/share/cvmfs-server"
++    DESTINATION  share/cvmfs-server
+     PERMISSIONS  OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+   )
+   install(
+     FILES        server/fix_stats_db.sh
+-    DESTINATION  "/usr/share/cvmfs-server"
++    DESTINATION  share/cvmfs-server
+     PERMISSIONS  OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+   )
+   install(
+     FILES        server/stats_index.html.tpl
+-    DESTINATION  "/usr/share/cvmfs-server"
++    DESTINATION  share/cvmfs-server
+     PERMISSIONS  OWNER_READ GROUP_READ WORLD_READ
+   )
+ 
+diff --git a/cvmfs/cvmfs_config b/cvmfs/cvmfs_config
+index 5f84a6c4f..815ec5b0e 100755
+--- a/cvmfs/cvmfs_config
++++ b/cvmfs/cvmfs_config
+@@ -18,41 +18,10 @@ sys_arch=$(uname)
+ 
+ case $sys_arch in
+   Linux )
+-    if [ -x /sbin/service ]; then
+-      service="/sbin/service"
+-    elif [ -x /usr/sbin/service ]; then
+-      # Ubuntu
+-      service="/usr/sbin/service"
+-    elif [ -x /sbin/rc-service ] ; then
+-      # OpenRC
+-      service="/sbin/rc-service"
+-    elif [ -x /usr/bin/systemctl ] ; then
+-      # archlinux
+-      service="/usr/bin/systemctl"
+-    fi
+-    if [ -x /sbin/pidof ]; then
+-      pidof="/sbin/pidof"
+-    else
+-      # Ubuntu
+-      pidof="/bin/pidof"
+-    fi
+-    if [ -x /sbin/fuser ]; then
+-      fuser="/sbin/fuser"  # RHEL
+-    else
+-      fuser="/bin/fuser"  # Ubuntu, SuSE
+-    fi
+-    if [ -x /usr/bin/fusermount ]; then
+-      fusermount="/usr/bin/fusermount"  # RHEL, SuSE
+-    else
+-      fusermount="/bin/fusermount"  # Ubuntu
+-    fi
+-    if [ ! -x /usr/bin/attr ]; then
+-      # Fedora
+-      if [ ! -x /bin/attr ]; then
+-        echo "attr utility required"
+-        exit 1
+-      fi
+-    fi
++    service="$(command -v systemctl)"
++    pidof="$(command -v pidof)"
++    fuser="$(command -v fuser)"
++    fusermount="$(command -v fusermount)"
+     fuse_fs_type="fuse"
+     ;;
+ 
+diff --git a/mount/CMakeLists.txt b/mount/CMakeLists.txt
+index b0d2fce69..c4cf87221 100644
+--- a/mount/CMakeLists.txt
++++ b/mount/CMakeLists.txt
+@@ -142,25 +142,25 @@ else (MACOSX)
+     PERMISSIONS   OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+   )
+ 
+-  if (ARCHLINUX)
+-    SET( autofsmap_link    /etc/autofs/auto.cvmfs)
+-  else (ARCHLINUX)
+-    SET( autofsmap_link    /etc/auto.cvmfs)
+-  endif (ARCHLINUX)
+-  SET( autofsmap_dest    ${CMAKE_INSTALL_PREFIX}/${CVMFS_LIBEXEC_DIR})
+-  SET( autofsmap_target  ${autofsmap_dest}/auto.cvmfs)
+-  # Symlink /etc/(autofs)/auto.cvmfs --> /usr/lib(exec)/cvmfs/auto.cvmfs
+-  install(CODE "
+-    if (\"\$ENV{DESTDIR}\" STREQUAL \"\")
+-      execute_process(COMMAND ln -sf
+-        ${autofsmap_target}
+-        ${autofsmap_link})
+-    else ()
+-      execute_process(COMMAND ln -sf
+-        ${autofsmap_target}
+-        \$ENV{DESTDIR}/${autofsmap_link})
+-    endif ()
+-  ")
++  # if (ARCHLINUX)
++  #   SET( autofsmap_link    /etc/autofs/auto.cvmfs)
++  # else (ARCHLINUX)
++  #   SET( autofsmap_link    /etc/auto.cvmfs)
++  # endif (ARCHLINUX)
++  # SET( autofsmap_dest    ${CMAKE_INSTALL_PREFIX}/${CVMFS_LIBEXEC_DIR})
++  # SET( autofsmap_target  ${autofsmap_dest}/auto.cvmfs)
++  # # Symlink /etc/(autofs)/auto.cvmfs --> /usr/lib(exec)/cvmfs/auto.cvmfs
++  # install(CODE "
++  #   if (\"\$ENV{DESTDIR}\" STREQUAL \"\")
++  #     execute_process(COMMAND ln -sf
++  #       ${autofsmap_target}
++  #       ${autofsmap_link})
++  #   else ()
++  #     execute_process(COMMAND ln -sf
++  #       ${autofsmap_target}
++  #       \$ENV{DESTDIR}/${autofsmap_link})
++  #   endif ()
++  # ")
+ 
+   install (
+     TARGETS       ${MOUNT_TARGET_NAME}
